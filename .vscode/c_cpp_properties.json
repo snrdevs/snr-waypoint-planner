@@ -1,0 +1,19 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/home/snr/ttbot/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/snr/ttbot/src/turtlebot3_simulations/turtlebot3_fake/include/**",
+        "/home/snr/ttbot/src/turtlebot3_simulations/turtlebot3_gazebo/include/**",
+        "/home/snr/ttbot/src/turtlebot3/turtlebot3_slam/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS"
+    }
+  ]
+}
