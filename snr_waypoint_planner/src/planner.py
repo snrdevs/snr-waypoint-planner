@@ -59,7 +59,7 @@ mm_.count = 0
     
 # Publish the MarkerArray
 while not rospy.is_shutdown():
-    mm_.create_marker(mm_.count,mm_.count)
+    mm_.create_marker(0,0)
     
     # if(mm_.count > mm_.MARKERS_MAX): 
     #     markerArray.markers.pop(0)
