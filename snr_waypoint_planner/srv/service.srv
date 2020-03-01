@@ -1,0 +1,5 @@
+int16 req
+int16 write_to_file
+int16 publish_path
+---
+int16 resp

@@ -61,7 +61,7 @@ message_generation
 # Generate services in the 'srv' folder
 add_service_files(
   FILES
-  path_publisher_trigger.srv
+  service.srv
 )
 
 ## Generate actions in the 'action' folder

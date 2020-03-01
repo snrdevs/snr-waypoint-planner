@@ -20,7 +20,7 @@ from geometry_msgs.msg import PointStamped, PoseStamped, Quaternion
 import roslib; roslib.load_manifest('visualization_marker_tutorials')
 from visualization_msgs.msg import Marker, MarkerArray
 
-from snr_waypoint_planner.srv import path_publisher_trigger, path_publisher_triggerResponse
+from snr_waypoint_planner.srv import service, serviceResponse
  
     
 
@@ -41,11 +41,8 @@ class WaypointPlanner:
         self.waypoint_marker_publisher                          = rospy.Publisher(self.waypoint_marker_pub_topic, MarkerArray,queue_size=10)
         self.inp_marker_publisher                               = rospy.Publisher(self.inp_marker_pub_topic, MarkerArray,queue_size=10)
         self.path_publisher                                     = rospy.Publisher(self.path_topic,Path,queue_size=10)
-        self.show_interpolated_path_service                     = rospy.Service('path_publisher_trigger',path_publisher_trigger,self.show_interpolated_path)
-        self.pp_trigger = True 
+        self.service                                            = rospy.Service('service',service,self.service_cb)
 
-        self.resolution     = 0.001 #default 
-        self.frequency      = 10 #hz 
         self.point_listener = rospy.Subscriber('/clicked_point', PointStamped, self.record_waypoints, queue_size=1)
         # self.odom_listener  = rospy.Subscriber('/odom', Odometry, self.odometry_holder, queue_size=1)
         
@@ -72,67 +69,55 @@ class WaypointPlanner:
         while not rospy.is_shutdown(): 
             self.waypoint_marker_publisher.publish(self.markerArray_wp)
             self.inp_marker_publisher.publish(self.markerArray_inp)
-            # self.path_publisher.publish(self.path2go)
+            self.path_publisher.publish(self.path2go)
             rospy.Rate(30).sleep()
         pass
     
     
     def record_waypoints(self, in_data):
             # take x and y and make z = 0
+            self.cls() 
             self.x.append(in_data.point.x) 
             self.y.append(in_data.point.y)
-
+            rospy.loginfo("Recording data \t | Total Number of Waypoints: {}".format(len(self.x)))
+            
             # create waypoint markers 
-            created_marker = self.create_marker(in_data.point.x,in_data.point.y,0,0,1)
+            created_marker = self.create_marker('sphere',in_data.point.x,in_data.point.y,0,0,1,0)
             self.markerArray_wp.markers.append(created_marker)
             self.renumber_markers(self.markerArray_wp)
-            print("#" * 30)
-            print(self.x)
-            print(self.y)
-            print("#" * 30)
+
             
     def interpolate(self): 
         # create np arrays for manipulation 
-        # a = [2, 2, 1, 0]
-        # b = [0, 0.7, 0.7,0.7]
+        # a = [0, 2, 2, 0,0] # for testing! | creates rectangle
+        # b = [0, 0, 2, 2,0] # for testing!  | creates rectangle 
+
+        # pre interpolation for better smoothness
         a = self.x 
         b = self.y 
-        
-        #pre interpolation 
         x = np.array(a) 
         y = np.array(b)
 
-        print(x.shape)
-        print(y.shape)
-
         ctr = np.vstack((x,y)).T #stack x and y points 
         ctr[:,0] = x 
         ctr[:,1] = y
 
-        tck,u = interpolate.splprep([x,y],k=1,s=0)
-        u=np.linspace(0,1,num=100,endpoint=True)
-        out = interpolate.splev(u,tck)
-
-        xnew = out[0]
-        ynew = out[1]
-
-        x = np.array(xnew) 
-        y = np.array(ynew)
-
-        print(x.shape)
-        print(y.shape)
-
-        ctr = np.vstack((x,y)).T #stack x and y points 
-        ctr[:,0] = x 
-        ctr[:,1] = y
-
-        tck,u = interpolate.splprep([x,y],k=3,s=0.005)
-        u=np.linspace(0,1,num=100,endpoint=True)
-        out = interpolate.splev(u,tck)
-
-        xnew = out[0]
-        ynew = out[1]
+        tck,u = interpolate.splprep([x,y],k=1,s=0)  # linear interpolation k = 1 
+        u=np.linspace(0,1,num=120,endpoint=True)    # with 120 points 
+        out = interpolate.splev(u,tck)              # return generated points as array 
         
+        # Start to B-Spline Interpolation
+        x = np.array(out[0]) 
+        y = np.array(out[1])
+
+        ctr = np.vstack((x,y)).T                    # Stack x and y points 
+        ctr[:,0] = x 
+        ctr[:,1] = y
+
+        tck,u = interpolate.splprep([x,y],k=3,s=0.0045)
+        u=np.linspace(0,1,num=100,endpoint=True)
+        out = interpolate.splev(u,tck)
+
         self.xnew = out[0]
         self.ynew = out[1]
         
@@ -142,76 +127,70 @@ class WaypointPlanner:
         self.yaw = np.zeros(len(self.xnew))
 
         t = 0 #counter for loop - start from 1 
-        for t in range(len(self.xnew) - 1):
+        for t in range(len(self.xnew) -1 ):
+            self.cls()
             self.yaw[t+1] = atan2(self.ynew[t+1]-self.ynew[t], self.xnew[t+1]-self.xnew[t])
+            rospy.loginfo("Finding yaw angles")
 
-        #TODO: CHECK 
-        # self.yaw[0] = self.yaw[1] # equalize second to first 
-        # self.yaw[-1] = self.yaw[-2] # equalize last to previous one
+        self.yaw[0] = self.yaw[1] # equalize second to first 
+        self.yaw[-1] = self.yaw[-2] # equalize last to previous one
 
-    def show_interpolated_path(self,user_req):
+    def cls(self): 
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def service_cb(self,user_req):
         if user_req.req == 1:
-            # os.system('cls' if os.name == 'nt' else 'clear')
+            self.cls()
             self.interpolate()
-            
-            # #show on rviz 
-            # #re -create markerarray 
-            
+            self.find_yaw() 
+
+            #show on rviz 
             if len(self.markerArray_inp.markers)<1:
                 i = 0       
                 for i in range(len(self.xnew)):
-                    created_marker_inp = self.create_marker(self.xnew[i], self.ynew[i],1,0,0)
+                    created_marker_inp = self.create_marker('arrow',self.xnew[i], self.ynew[i],1,0,0,self.yaw[i])
                     self.markerArray_inp.markers.append(created_marker_inp)
             else: 
-                self.markerArray_inp.markers =[]
-                    
-            self.renumber_markers(self.markerArray_inp) 
-
-        return path_publisher_triggerResponse(1)
-
-            # self.write_to_file()
-            # print("Path file generated to: " + self.arb_path_file)
-            # print("-" * 100)
-            
-#             for i in range(len(self.xnew)):
-# # TODO
-#                 self.pose2write             = PoseStamped() 
-
-#                 self.pose2write.header.frame_id = 'odom' #check 
-#                 # self.pose2write.header.stamp    = rospy.Time.now()
-        
-#                 self.path2go.header.frame_id    = 'map'
-#                 # self.path2go.header.stamp       =  rospy.Time.now() 
-
-#                 self.pose2write.pose.position.x = self.xnew[i]
-#                 self.pose2write.pose.position.y = self.xnew[i]
-
-#                 self.arb_quat = tf.transformations.quaternion_from_euler(0,0,self.yaw[i])
-#                 # self.pose2write.pose.orientation = tf.transformations.quaternion_from_euler(0,0,self.yaw[i])
-#                 self.pose2write.pose.orientation.x = self.arb_quat[0]
-#                 self.pose2write.pose.orientation.y = self.arb_quat[1]
-#                 self.pose2write.pose.orientation.z = self.arb_quat[2]
-#                 self.pose2write.pose.orientation.w = self.arb_quat[3]
-
-                
-#                 #pose2write created 
-#                 self.path2go.poses.append(self.pose2write)
-
-#                 print(self.path2go.poses)
-#                 os.system('cls' if os.name == 'nt' else 'clear')
-#                 print("publishing path..")
-#                 # self.pp_trigger = True 
-#             # print("odom_quat:" , self.odom_quat)
+                self.markerArray_inp.markers =[]        
+            self.renumber_markers(self.markerArray_inp)
 
             
-            # self.pose2write.pose.orientation.x = yaw_to_quat --> x 
-            # self.pose2write.pose.orientation.y = yaw_to_quat --> y 
-            # self.pose2write.pose.orientation.Z = yaw_to_quat --> z 
-            
+            # check write_to_file request
+            if user_req.write_to_file == 1:
+                self.write_to_file()
+                self.cls() 
+                rospy.loginfo("Path file generated to: " + self.arb_path_file)
 
+            # check publish path request
+            if user_req.publish_path == 1: 
+                for i in range(len(self.xnew)):
+                    # create pose 
+                    self.pose2write                 =   PoseStamped() 
+                    # set header 
+                    self.pose2write.header.frame_id =   'odom' #ok
+                    self.pose2write.header.seq      =   i
+                    self.pose2write.header.stamp    =   rospy.Time.now()
+                    # set position 
+                    self.pose2write.pose.position.x =   self.xnew[i]
+                    self.pose2write.pose.position.y =   self.ynew[i]
+                    # set orientation 
+                    quat_coord = tf.transformations.quaternion_from_euler(0,0,self.yaw[i])
+                    self.pose2write.pose.orientation.x = quat_coord[0]
+                    self.pose2write.pose.orientation.y = quat_coord[1]
+                    self.pose2write.pose.orientation.z = quat_coord[2]
+                    self.pose2write.pose.orientation.w = quat_coord[3]
 
+                    # create path and append poses 
+                    self.path2go.header.frame_id    =   'map'
+                    self.path2go.header.seq         =   i
+                    self.path2go.header.stamp       =   rospy.Time.now() 
 
-            # return path_publisher_triggerResponse(1)
+                    self.path2go.poses.append(self.pose2write)
+
+        return serviceResponse(1)
+
+    def create_path(self): 
+        pass
     
     def write_to_file(self):
         #clear file contents and write  
@@ -254,10 +233,16 @@ class WaypointPlanner:
         self.z = []
         self.yaw = [] 
         
-    def create_marker(self, x,y,r,g,b):
+    def create_marker(self, type,x,y,r,g,b,yaw):
         self.marker = Marker() 
         self.marker.header.frame_id="/map"
-        self.marker.type = self.marker.SPHERE
+        if type == 'sphere': 
+            self.marker.type = self.marker.SPHERE
+        elif type == 'arrow':
+            self.marker.type = self.marker.ARROW
+        else: 
+            self.marker.type = self.marker.SPHERE
+            
         self.marker.action = self.marker.ADD
         
         self.marker.scale.x = 0.02
@@ -269,11 +254,17 @@ class WaypointPlanner:
         self.marker.color.g = g
         self.marker.color.b = b
 
-        self.marker.pose.orientation.w = 1.0
+        quat_ =  tf.transformations.quaternion_from_euler(0,0,yaw) 
+        
         self.marker.pose.position.x = x
         self.marker.pose.position.y = y 
         self.marker.pose.position.z = 0.0
 
+        self.marker.pose.orientation.x = quat_[0] 
+        self.marker.pose.orientation.y = quat_[1] 
+        self.marker.pose.orientation.z = quat_[2] 
+        self.marker.pose.orientation.w = quat_[3]
+        
         return self.marker
 
     def renumber_markers(self,in_marker_arr):
