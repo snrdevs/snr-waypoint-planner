@@ -81,38 +81,61 @@ class WaypointPlanner:
             # take x and y and make z = 0
             self.x.append(in_data.point.x) 
             self.y.append(in_data.point.y)
-           
-            
+
             # create waypoint markers 
             created_marker = self.create_marker(in_data.point.x,in_data.point.y,0,0,1)
             self.markerArray_wp.markers.append(created_marker)
-            self.renumber_markers(self.markerArray_wp)   
+            self.renumber_markers(self.markerArray_wp)
+            print("#" * 30)
+            print(self.x)
+            print(self.y)
+            print("#" * 30)
             
     def interpolate(self): 
-        # select interpolation method 
-        # TO BE USED 
-        # f = interpolate.interp1d(self.x, self.y, kind=self.interp_method)
-        x_ = np.array(self.xnew.sort())
-        y_ = np.array(self.ynew.sort()) 
-        print("x:", x_, "y:", y_)
+        # create np arrays for manipulation 
+        # a = [2, 2, 1, 0]
+        # b = [0, 0.7, 0.7,0.7]
+        a = self.x 
+        b = self.y 
         
-        t, c, k = interpolate.splrep(x_, y_, s=0, k=4)
-        print(t,c,k) 
+        #pre interpolation 
+        x = np.array(a) 
+        y = np.array(b)
+
+        print(x.shape)
+        print(y.shape)
+
+        ctr = np.vstack((x,y)).T #stack x and y points 
+        ctr[:,0] = x 
+        ctr[:,1] = y
+
+        tck,u = interpolate.splprep([x,y],k=1,s=0)
+        u=np.linspace(0,1,num=100,endpoint=True)
+        out = interpolate.splev(u,tck)
+
+        xnew = out[0]
+        ynew = out[1]
+
+        x = np.array(xnew) 
+        y = np.array(ynew)
+
+        print(x.shape)
+        print(y.shape)
+
+        ctr = np.vstack((x,y)).T #stack x and y points 
+        ctr[:,0] = x 
+        ctr[:,1] = y
+
+        tck,u = interpolate.splprep([x,y],k=3,s=0.005)
+        u=np.linspace(0,1,num=100,endpoint=True)
+        out = interpolate.splev(u,tck)
+
+        xnew = out[0]
+        ynew = out[1]
         
-        N = 1000
-        xmin_ = x_.min()
-        xmax  = x_.max() 
-        xx_ = np.linspace(xmin_,xmax,N)
-        f_spline = interpolate.BSpline(t,c,k,extrapolate=False)
-        yy_ = f_spline(xx_)
-
-        # TO BE USED 
-        #create new array for x and y values and evalute with f 
-        # self.xnew = np.arange(self.x[0], self.x[-1], self.resolution)
-        # self.ynew = f(self.xnew)
-
-        self.xnew = xx_
-        self.ynew = yy_
+        self.xnew = out[0]
+        self.ynew = out[1]
+        
         
     def find_yaw(self):
         #find yaw angles - #create yaw variable / create zero vector for memory allocation 
@@ -127,19 +150,24 @@ class WaypointPlanner:
         # self.yaw[-1] = self.yaw[-2] # equalize last to previous one
 
     def show_interpolated_path(self,user_req):
-        os.system('cls' if os.name == 'nt' else 'clear')
-        self.interpolate()
+        if user_req.req == 1:
+            # os.system('cls' if os.name == 'nt' else 'clear')
+            self.interpolate()
+            
+            # #show on rviz 
+            # #re -create markerarray 
+            
+            if len(self.markerArray_inp.markers)<1:
+                i = 0       
+                for i in range(len(self.xnew)):
+                    created_marker_inp = self.create_marker(self.xnew[i], self.ynew[i],1,0,0)
+                    self.markerArray_inp.markers.append(created_marker_inp)
+            else: 
+                self.markerArray_inp.markers =[]
+                    
+            self.renumber_markers(self.markerArray_inp) 
 
-        # #show on rviz 
-        # #re -create markerarray 
-        i = 0 
-        for i in range(len(self.xnew)):
-            created_marker_inp = self.create_marker(self.xnew[i], self.ynew[i],1,0,0)
-            self.markerArray_inp.markers.append(created_marker_inp)
-
-        self.renumber_markers(self.markerArray_inp) 
-
-
+        return path_publisher_triggerResponse(1)
 
             # self.write_to_file()
             # print("Path file generated to: " + self.arb_path_file)
