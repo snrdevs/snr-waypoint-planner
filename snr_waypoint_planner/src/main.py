@@ -1,5 +1,12 @@
 #!/usr/bin/python
  # -*- coding: utf-8 -*-
+"""
+SNR Waypoint Planner
+
+
+"""
+
+
 import os 
 
 import numpy as np 
@@ -44,11 +51,8 @@ class WaypointPlanner:
         self.service                                            = rospy.Service('service',service,self.service_cb)
 
         self.point_listener = rospy.Subscriber('/clicked_point', PointStamped, self.record_waypoints, queue_size=1)
-        # self.odom_listener  = rospy.Subscriber('/odom', Odometry, self.odometry_holder, queue_size=1)
-        
-        self.starter        = 0
+    
         self.arb_path_file = None 
-        self.interp_method = 'quadratic' #['zero','linear', 'nearest', 'quadratic', 'cubic', 'previous', 'next']
           
         # init x,y,z coordinates 
         self.x          =   [] 
@@ -60,19 +64,22 @@ class WaypointPlanner:
         self.yaw        =   [] 
         self.odom_quat  =   None
         
-        self.path2go                = Path() 
+        self.path2go                    = Path() 
+        self.path2go.header.frame_id    =  'map'
 
        # Call main function 
         self.main() 
 
     def main(self):
+        rate = rospy.Rate(20)
         while not rospy.is_shutdown(): 
             self.waypoint_marker_publisher.publish(self.markerArray_wp)
             self.inp_marker_publisher.publish(self.markerArray_inp)
+
+            self.path2go.header.stamp       =   rospy.Time.now() 
             self.path_publisher.publish(self.path2go)
-            rospy.Rate(30).sleep()
-        pass
-    
+            rate.sleep() 
+            
     
     def record_waypoints(self, in_data):
             # take x and y and make z = 0
@@ -163,35 +170,32 @@ class WaypointPlanner:
 
             # check publish path request
             if user_req.publish_path == 1: 
-                for i in range(len(self.xnew)):
-                    # create pose 
-                    self.pose2write                 =   PoseStamped() 
-                    # set header 
-                    self.pose2write.header.frame_id =   'odom' #ok
-                    self.pose2write.header.seq      =   i
-                    self.pose2write.header.stamp    =   rospy.Time.now()
-                    # set position 
-                    self.pose2write.pose.position.x =   self.xnew[i]
-                    self.pose2write.pose.position.y =   self.ynew[i]
-                    # set orientation 
-                    quat_coord = tf.transformations.quaternion_from_euler(0,0,self.yaw[i])
-                    self.pose2write.pose.orientation.x = quat_coord[0]
-                    self.pose2write.pose.orientation.y = quat_coord[1]
-                    self.pose2write.pose.orientation.z = quat_coord[2]
-                    self.pose2write.pose.orientation.w = quat_coord[3]
-
-                    # create path and append poses 
-                    self.path2go.header.frame_id    =   'map'
-                    self.path2go.header.seq         =   i
-                    self.path2go.header.stamp       =   rospy.Time.now() 
-
-                    self.path2go.poses.append(self.pose2write)
-
+                self.create_path() 
         return serviceResponse(1)
 
-    def create_path(self): 
-        pass
-    
+    def create_path(self):
+        rospy.loginfo("Creating and publishing path...")
+
+        for i in range(len(self.xnew)):
+            # create pose 
+            self.pose2write                 =   PoseStamped() 
+            # set header 
+            self.pose2write.header.frame_id =   'odom' #ok
+            self.pose2write.header.seq      =   i
+            self.pose2write.header.stamp    =   rospy.Time.now()
+            # set position 
+            self.pose2write.pose.position.x =   self.xnew[i]
+            self.pose2write.pose.position.y =   self.ynew[i]
+            # set orientation 
+            quat_coord = tf.transformations.quaternion_from_euler(0,0,self.yaw[i])
+            self.pose2write.pose.orientation.x = quat_coord[0]
+            self.pose2write.pose.orientation.y = quat_coord[1]
+            self.pose2write.pose.orientation.z = quat_coord[2]
+            self.pose2write.pose.orientation.w = quat_coord[3]
+
+            # create path and append poses 
+            self.path2go.poses.append(self.pose2write)
+
     def write_to_file(self):
         #clear file contents and write  
         package_path = rospack.get_path('snr_waypoint_planner')
