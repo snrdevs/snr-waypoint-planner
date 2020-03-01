@@ -96,12 +96,12 @@ class WaypointPlanner:
             
     def interpolate(self): 
         # create np arrays for manipulation 
-        # a = [0, 2, 2, 0,0] # for testing! | creates rectangle
-        # b = [0, 0, 2, 2,0] # for testing!  | creates rectangle 
+        a = [0, 2, 2, 0,0] # for testing! | creates rectangle
+        b = [0, 0, 2, 2,0] # for testing!  | creates rectangle 
 
         # pre interpolation for better smoothness
-        a = self.x 
-        b = self.y 
+        # a = self.x 
+        # b = self.y 
         x = np.array(a) 
         y = np.array(b)
 
@@ -121,7 +121,7 @@ class WaypointPlanner:
         ctr[:,0] = x 
         ctr[:,1] = y
 
-        tck,u = interpolate.splprep([x,y],k=3,s=0.0045)
+        tck,u = interpolate.splprep([x,y],k=3,s=0.0025)
         u=np.linspace(0,1,num=100,endpoint=True)
         out = interpolate.splev(u,tck)
 
@@ -223,13 +223,7 @@ class WaypointPlanner:
                 file.write(self.coord2write)
             file.close()
                 
-    def show_path(self):
-        #show matplotlib plot
-        # TODO: CHECK !! 
-        # self.ax.clear()
-        plt.plot(self.x, self.y, 'o', self.xnew, self.ynew, '-')
-        plt.legend(['waypoints','interpolated_path'])
-        plt.show() 
+
 
     def clear_all(self): 
         self.x = [] 
@@ -276,8 +270,6 @@ class WaypointPlanner:
         for m_ in in_marker_arr.markers: 
             m_.id = id 
             id+=1 
-
-
 
 if __name__ == "__main__":
     path_planner = WaypointPlanner()
