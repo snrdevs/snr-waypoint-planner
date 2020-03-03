@@ -2,8 +2,8 @@
  # -*- coding: utf-8 -*-
 """
 SNR Waypoint Planner
-
-
+Author  : Hasan Sener
+Email   : snrdevs@outlook.com
 """
 
 
@@ -29,7 +29,6 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from snr_waypoint_planner.srv import service, serviceResponse
  
-    
 
 class WaypointPlanner:
     
@@ -48,8 +47,10 @@ class WaypointPlanner:
         self.waypoint_marker_publisher                          = rospy.Publisher(self.waypoint_marker_pub_topic, MarkerArray,queue_size=10)
         self.inp_marker_publisher                               = rospy.Publisher(self.inp_marker_pub_topic, MarkerArray,queue_size=10)
         self.path_publisher                                     = rospy.Publisher(self.path_topic,Path,queue_size=10)
+        # self.odom_listener                                      = rospy.Subscriber('/odom', Odometry, self.listen_odom, queue_size=1)
+        self.odom_flag = False 
         self.service                                            = rospy.Service('service',service,self.service_cb)
-
+    
         self.point_listener = rospy.Subscriber('/clicked_point', PointStamped, self.record_waypoints, queue_size=1)
     
         self.arb_path_file = None 
@@ -58,6 +59,7 @@ class WaypointPlanner:
         self.x          =   [] 
         self.y          =   []
         self.yaw        =   []
+
         # new x and y values after interpolation 
         self.xnew       =   []
         self.ynew       =   []
@@ -75,12 +77,13 @@ class WaypointPlanner:
         while not rospy.is_shutdown(): 
             self.waypoint_marker_publisher.publish(self.markerArray_wp)
             self.inp_marker_publisher.publish(self.markerArray_inp)
+            if len(self.x)>0:
+                print("x: {} y: {}".format(self.x[0],self.y[0]))
 
             self.path2go.header.stamp       =   rospy.Time.now() 
             self.path_publisher.publish(self.path2go)
             rate.sleep() 
             
-    
     def record_waypoints(self, in_data):
             # take x and y and make z = 0
             self.cls() 
@@ -91,17 +94,16 @@ class WaypointPlanner:
             # create waypoint markers 
             created_marker = self.create_marker('sphere',in_data.point.x,in_data.point.y,0,0,1,0)
             self.markerArray_wp.markers.append(created_marker)
-            self.renumber_markers(self.markerArray_wp)
-
-            
+            self.renumber_markers(self.markerArray_wp)        
+        
     def interpolate(self): 
         # create np arrays for manipulation 
-        a = [0, 2, 2, 0,0] # for testing! | creates rectangle
-        b = [0, 0, 2, 2,0] # for testing!  | creates rectangle 
+        # a = [0, 2, 2, 0,0] # for testing! | creates rectangle
+        # b = [0, 0, 2, 2,0] # for testing!  | creates rectangle 
 
         # pre interpolation for better smoothness
-        # a = self.x 
-        # b = self.y 
+        a = self.x 
+        b = self.y 
         x = np.array(a) 
         y = np.array(b)
 
@@ -127,8 +129,7 @@ class WaypointPlanner:
 
         self.xnew = out[0]
         self.ynew = out[1]
-        
-        
+          
     def find_yaw(self):
         #find yaw angles - #create yaw variable / create zero vector for memory allocation 
         self.yaw = np.zeros(len(self.xnew))
@@ -223,8 +224,6 @@ class WaypointPlanner:
                 file.write(self.coord2write)
             file.close()
                 
-
-
     def clear_all(self): 
         self.x = [] 
         self.y = [] 
